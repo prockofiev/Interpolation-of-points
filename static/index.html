@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Интерактивный график функции</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js"></script>
+    <style>
+        body { font-family: sans-serif; margin: 30px; display: flex; gap: 40px; }
+        .controls { width: 300px; }
+        .chart-container { flex-grow: 1; max-width: 800px; }
+        .point-row { display: flex; gap: 10px; margin-bottom: 8px; }
+        input { width: 70px; padding: 4px; }
+        button { padding: 6px 12px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <h3>Ввод точек (X, Y)</h3>
+        <div id="pointsList">
+            <div class="point-row">
+                <input type="number" class="coord-x" value="1" step="any">
+                <input type="number" class="coord-y" value="2" step="any">
+                <button onclick="this.parentElement.remove(); updateChart();">❌</button>
+            </div>
+            <div class="point-row">
+                <input type="number" class="coord-x" value="2" step="any">
+                <input type="number" class="coord-y" value="4" step="any">
+                <button onclick="this.parentElement.remove(); updateChart();">❌</button>
+            </div>
+            <div class="point-row">
+                <input type="number" class="coord-x" value="3" step="any">
+                <input type="number" class="coord-y" value="1" step="any">
+                <button onclick="this.parentElement.remove(); updateChart();">❌</button>
+            </div>
+        </div>
+        <button onclick="addPointField()">➕ Добавить точку</button>
+        <br><br>
+        <button onclick="updateChart()" style="background: #4CAF50; color: white; border: none; font-weight: bold;">Построить график</button>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="myChart"></canvas>
+    </div>
+
+    <script>
+        let myChart = null;
+
+        function addPointField() {
+            const div = document.createElement('div');
+            div.className = 'point-row';
+            div.innerHTML = `
+                <input type="number" class="coord-x" value="0" step="any">
+                <input type="number" class="coord-y" value="0" step="any">
+                <button onclick="this.parentElement.remove(); updateChart();">❌</button>
+            `;
+            document.getElementById('pointsList').appendChild(div);
+            
+            // Навешиваем автообновление при изменении
+            div.querySelectorAll('input').forEach(input => input.addEventListener('input', updateChart));
+            updateChart();
+        }
+
+        // Слушаем изменения во всех начальных инпутах
+        document.querySelectorAll('.point-row input').forEach(input => input.addEventListener('input', updateChart));
+
+        async function updateChart() {
+            const rows = document.querySelectorAll('.point-row');
+            const points = [];
+            
+            rows.forEach(row => {
+                const x = parseFloat(row.querySelector('.coord-x').value);
+                const y = parseFloat(row.querySelector('.coord-y').value);
+                if (!isNaN(x) && !isNaN(y)) {
+                    points.push({ x, y });
+                }
+            });
+
+            if (points.length === 0) return;
+
+            // Отправляем точки на Go бэкенд
+            const response = await fetch('/api/calculate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ points })
+            });
+
+            const data = await response.json();
+
+            // Отрисовка графика через Chart.js
+            const ctx = document.getElementById('myChart').getContext('2d');
+            
+            if (myChart) {
+                myChart.destroy();
+            }
+
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Исходные точки',
+                            data: points,
+                            borderColor: 'red',
+                            backgroundColor: 'red',
+                            pointRadius: 6,
+                            showLine: false // только точки
+                        },
+                        {
+                            label: 'Интерполяция (Лагранж)',
+                            data: data.points,
+                            borderColor: 'blue',
+                            borderWidth: 2,
+                            pointRadius: 0, // скрываем точки на самой кривой
+                            fill: false,
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    scales: {
+                        x: { type: 'linear', position: 'bottom' },
+                        y: { type: 'linear' }
+                    }
+                }
+            });
+        }
+
+        // Первый запуск при загрузке страницы
+        updateChart();
+    </script>
+</body>
+</html>

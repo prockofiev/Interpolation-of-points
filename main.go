@@ -1,10 +1,15 @@
 package main
 
-import "fmt"
+import (
+	"encoding/json"
+	"flag"
+	"fmt"
+	"net/http"
+)
 
 type Point struct {
-	x float64
-	y float64
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
 }
 
 type Factor struct {
@@ -78,8 +83,8 @@ func runConsoleMode() {
 			continue
 		} else {
 			points[i] = Point{
-				x: input_x,
-				y: input_y,
+				X: input_x,
+				Y: input_y,
 			}
 		}
 	}
@@ -102,24 +107,20 @@ func buildLagrangeFunction(points []Point) Function {
 			factors: make([]Factor, pointCount-1),
 		}
 		for j := 0; j < i; j++ {
-			new_addend.factors[j] = Factor{x0: points[j].x}
+			new_addend.factors[j] = Factor{x0: points[j].X}
 		}
 		for j := i; j < pointCount-1; j++ {
-			new_addend.factors[j] = Factor{x0: points[j+1].x}
+			new_addend.factors[j] = Factor{x0: points[j+1].X}
 		}
-		denom := new_addend.forward(points[i].x)
+		denom := new_addend.forward(points[i].X)
 		if denom != 0 {
-			new_addend.a *= points[i].y / denom
+			new_addend.a *= points[i].Y / denom
 		} else {
 			new_addend.a = 0
 		}
 		function.addends[i] = new_addend
 	}
 	return function
-}
-
-func main() {
-	runConsoleMode()
 }
 
 func printPolynomial(coeffs []float64) {
@@ -149,4 +150,101 @@ func printPolynomial(coeffs []float64) {
 		first = false
 	}
 	fmt.Println()
+}
+
+type Request struct {
+	Points []Point `json:"points"`
+}
+
+type Response struct {
+	Points     []Point `json:"points"`
+	Polynomial string  `json:"polynomial"`
+}
+
+func calculateHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req Request
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil || len(req.Points) == 0 {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+
+	points := req.Points
+	function := buildLagrangeFunction(points)
+
+	minX, maxX := points[0].X, points[0].X
+	for _, p := range points {
+		if p.X < minX {
+			minX = p.X
+		}
+		if p.X > maxX {
+			maxX = p.X
+		}
+	}
+
+	if minX == maxX {
+		minX -= 5
+		maxX += 5
+	} else {
+		padding := (maxX - minX) * 0.2
+		minX -= padding
+		maxX += padding
+	}
+
+	chartPoints := make([]Point, 0, 200)
+	steps := 200
+	stepSize := (maxX - minX) / float64(steps)
+	for i := 0; i <= steps; i++ {
+		curX := minX + float64(i)*stepSize
+		chartPoints = append(chartPoints, Point{
+			X: curX,
+			Y: function.forward(curX),
+		})
+	}
+
+	polyStr := "None"
+
+	resp := Response{
+		Points:     chartPoints,
+		Polynomial: polyStr,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func runWebMode(port string) {
+	http.Handle("/", http.FileServer(http.Dir("./static")))
+	http.HandleFunc("/api/calculate", calculateHandler)
+
+	fmt.Printf("Веб-сервер запущен на http://localhost:%s\n", port)
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
+		fmt.Println("Ошибка старта сервера:", err)
+	}
+}
+
+func main() {
+	webMode := flag.Bool("web", false, "Запустить в режиме веб-сервиса")
+	port := flag.String("port", "8080", "Порт для веб-сервера")
+	flag.Parse()
+
+	if *webMode {
+		runWebMode(*port)
+	} else {
+		runConsoleMode()
+	}
 }
