@@ -67,8 +67,9 @@ func main() {
 	var points []Point = make([]Point, pointCount)
 
 	var input_x, input_y float64
+	fmt.Println("Вводите координаты точки через запятую!")
 	for i := 0; i < int(pointCount); i++ {
-		fmt.Printf("Введите координаты точки №%d через запятую: ", i+1)
+		fmt.Printf("Точка №%d: ", i+1)
 		_, err := fmt.Scanf("%f, %f\n", &input_x, &input_y)
 
 		if err != nil {
