@@ -59,7 +59,7 @@ func (function Function) toPolynomial() []float64 {
 	return totalCoeffs
 }
 
-func main() {
+func runConsoleMode() {
 	var pointCount uint8
 	fmt.Print("Введите количество точек: ")
 	fmt.Scanln(&pointCount)
@@ -84,38 +84,42 @@ func main() {
 		}
 	}
 
+	function := buildLagrangeFunction(points)
+	coeffs := function.toPolynomial()
+	fmt.Print("Итоговый многочлен: ")
+	printPolynomial(coeffs)
+}
+
+func buildLagrangeFunction(points []Point) Function {
+	pointCount := len(points)
 	function := Function{
 		addends: make([]Addend, pointCount),
 	}
 	var new_addend Addend
-	for i := 0; i < int(pointCount); i++ {
+	for i := 0; i < pointCount; i++ {
 		new_addend = Addend{
 			a:       1,
 			factors: make([]Factor, pointCount-1),
 		}
 		for j := 0; j < i; j++ {
-			new_addend.factors[j] = Factor{
-				x0: points[j].x,
-			}
+			new_addend.factors[j] = Factor{x0: points[j].x}
 		}
-		for j := i; j < int(pointCount)-1; j++ {
-			new_addend.factors[j] = Factor{
-				x0: points[j+1].x,
-			}
-
+		for j := i; j < pointCount-1; j++ {
+			new_addend.factors[j] = Factor{x0: points[j+1].x}
 		}
-		new_addend.a *= points[i].y / new_addend.forward(points[i].x)
+		denom := new_addend.forward(points[i].x)
+		if denom != 0 {
+			new_addend.a *= points[i].y / denom
+		} else {
+			new_addend.a = 0
+		}
 		function.addends[i] = new_addend
 	}
+	return function
+}
 
-	// fmt.Println(function.forward(10))
-	// fmt.Println(function.forward(1))
-	// fmt.Println(function.forward(2))
-	// fmt.Println(function.forward(3))
-
-	coeffs := function.toPolynomial()
-	fmt.Print("Итоговый многочлен: ")
-	printPolynomial(coeffs)
+func main() {
+	runConsoleMode()
 }
 
 func printPolynomial(coeffs []float64) {
